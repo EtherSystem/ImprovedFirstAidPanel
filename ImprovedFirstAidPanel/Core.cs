@@ -1,7 +1,7 @@
 ﻿using Il2CppInterop.Runtime.Injection;
 using Il2CppTLD.IntBackedUnit;
 
-[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.0", "EtherSystem", null)]
+[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.1", "EtherSystem", null)]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 
 namespace ImprovedFirstAidPanel
@@ -143,6 +143,7 @@ namespace ImprovedFirstAidPanel
         private static readonly Color s_NormalTextColor = new(0.68f, 0.68f, 0.64f, 1f);
         private static readonly Color s_HoverTextColor = new(0.86f, 0.86f, 0.80f, 1f);
         private static readonly Color s_PressedTextColor = new(0.55f, 0.55f, 0.52f, 1f);
+        private static readonly Color s_DisabledTextColor = new(0.42f, 0.42f, 0.40f, 1f);
 
         private Panel_FirstAid _panel;
         private bool _altTreatment;
@@ -199,7 +200,7 @@ namespace ImprovedFirstAidPanel
 
             if (FirstAidTreatmentRouter.IsTreatmentActive)
             {
-                _label.color = new Color(0.42f, 0.42f, 0.40f, 1f);
+                _label.color = s_DisabledTextColor;
                 return;
             }
 
@@ -223,6 +224,7 @@ namespace ImprovedFirstAidPanel
         private const float ButtonYOffset = -45f;
 
         private static readonly Color s_ButtonTextColor = new(0.68f, 0.68f, 0.64f, 1f);
+        private static readonly Color s_ButtonDisabledTextColor = new(0.42f, 0.42f, 0.40f, 1f);
         private static readonly Color s_ButtonOutlineColor = new(0.04f, 0.04f, 0.035f, 0.95f);
 
         internal static void Refresh(Panel_FirstAid panel)
@@ -351,7 +353,7 @@ namespace ImprovedFirstAidPanel
         {
             label.enabled = true;
             label.text = altTreatment ? "USE ALT" : "USE";
-            label.color = FirstAidTreatmentRouter.IsTreatmentActive ? new Color(0.42f, 0.42f, 0.40f, 1f) : s_ButtonTextColor;
+            label.color = FirstAidTreatmentRouter.IsTreatmentActive ? s_ButtonDisabledTextColor : s_ButtonTextColor;
             label.alpha = 1f;
             label.width = (int)ButtonWidth;
             label.height = (int)ButtonHeight;
@@ -451,8 +453,6 @@ namespace ImprovedFirstAidPanel
 
             if (s_PendingAfflictionType == AfflictionType.Generic)
                 PrepareSelectedCustomAffliction(s_PendingAfflictionIndex);
-            else
-                ClearSelectedCustomAffliction();
 
             return true;
         }
@@ -538,8 +538,6 @@ namespace ImprovedFirstAidPanel
                 playerManager.m_UsedItemFromFirstAidPanel = true;
                 return result;
             }
-
-            ClearSelectedCustomAffliction();
 
             if (!TryGetSelectedVanillaAffliction(panel, s_PendingAfflictionType, s_PendingAfflictionIndex, out Affliction selectedAffliction)) return false;
 
@@ -672,7 +670,8 @@ namespace ImprovedFirstAidPanel
 
         private static void ClearSelectedCustomAffliction()
         {
-            if (!CacheAfflictionComponentReflection()) return;
+            if (!s_ReflectionCached) return;
+            if (s_SelectedCustomAfflictionField == null) return;
 
             s_SelectedCustomAfflictionField.SetValue(null, null);
         }
@@ -686,8 +685,20 @@ namespace ImprovedFirstAidPanel
 
             s_ReflectionCached = true;
 
-            Type globalFieldsType = AccessTools.TypeByName("AfflictionComponent.Patches.PanelAfflictionPatches.GlobalFields");
-            Type managerType = AccessTools.TypeByName("AfflictionComponent.Components.AfflictionManager");
+            Assembly afflictionComponentAssembly = null;
+
+            foreach (Assembly assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.GetName().Name != "AfflictionComponent") continue;
+
+                afflictionComponentAssembly = assembly;
+                break;
+            }
+
+            if (afflictionComponentAssembly == null) return false;
+
+            Type globalFieldsType = afflictionComponentAssembly.GetType("AfflictionComponent.Patches.PanelAfflictionPatches.GlobalFields", false);
+            Type managerType = afflictionComponentAssembly.GetType("AfflictionComponent.Components.AfflictionManager", false);
 
             if (globalFieldsType == null || managerType == null) return false;
 
