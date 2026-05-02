@@ -15,7 +15,7 @@ It makes the panel easier to use by adding body-area filtering and direct treatm
 
 ### Direct treatment buttons
 
-![Direct treatment buttons](ButtonsShowcase.png)
+![Direct treatment buttons](ButtonsShowcase.PNG)
 
 ### Body-area filtering
 
