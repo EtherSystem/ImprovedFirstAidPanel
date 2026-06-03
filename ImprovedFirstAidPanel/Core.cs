@@ -1,7 +1,7 @@
 ﻿using Il2CppInterop.Runtime.Injection;
 using Il2CppTLD.IntBackedUnit;
 
-[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.3", "EtherSystem", null)]
+[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.4", "EtherSystem", null)]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 
 namespace ImprovedFirstAidPanel
@@ -561,7 +561,7 @@ namespace ImprovedFirstAidPanel
             if (gearItem == null)
             {
                 GameAudioManager.PlayGUIError();
-                HUDMessage.AddMessage(Localization.Get("GAMEPLAY_NoItemToUse"));
+                HUDMessage.AddMessage("You don't have the required item.");
                 return false;
             }
 
@@ -724,7 +724,7 @@ namespace ImprovedFirstAidPanel
             if (available >= required) return true;
 
             GameAudioManager.PlayGUIError();
-            HUDMessage.AddMessage(Localization.Get("GAMEPLAY_PillsRequiredValue").Replace("{num-pills}", required.ToString()));
+            HUDMessage.AddMessage($"You need {required} pills for this treatment.");
 
             return false;
         }
