@@ -1,7 +1,7 @@
 ﻿using Il2CppInterop.Runtime.Injection;
 using Il2CppTLD.IntBackedUnit;
 
-[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.2", "EtherSystem", null)]
+[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.3", "EtherSystem", null)]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 
 namespace ImprovedFirstAidPanel
@@ -455,7 +455,7 @@ namespace ImprovedFirstAidPanel
             if (!IsSelectedIntestinalParasitesBlocked(panel)) return;
 
             GameAudioManager.PlayGUIError();
-            HUDMessage.AddMessage(Localization.Get("GAMEPLAY_IntestinalParasitesAlreadyTakenDose"));
+            HUDMessage.AddMessage("Daily dose already taken.");
         }
 
         internal static string GetTreatmentButtonText(Panel_FirstAid panel, bool altTreatment)
@@ -549,7 +549,7 @@ namespace ImprovedFirstAidPanel
             if (s_PendingAfflictionType == AfflictionType.IntestinalParasites && HasTakenIntestinalParasitesDoseToday())
             {
                 GameAudioManager.PlayGUIError();
-                HUDMessage.AddMessage(Localization.Get("GAMEPLAY_IntestinalParasitesAlreadyTakenDose"));
+                HUDMessage.AddMessage("Daily dose already taken.");
                 return false;
             }
 
