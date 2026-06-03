@@ -1,7 +1,7 @@
 ﻿using Il2CppInterop.Runtime.Injection;
 using Il2CppTLD.IntBackedUnit;
 
-[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.1", "EtherSystem", null)]
+[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.2", "EtherSystem", null)]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 
 namespace ImprovedFirstAidPanel
@@ -189,7 +189,12 @@ namespace ImprovedFirstAidPanel
         {
             if (_panel == null) return;
             if (!_panel.IsEnabled()) return;
-            if (FirstAidTreatmentRouter.IsTreatmentActive) return;
+            if (!FirstAidTreatmentRouter.CanStartTreatment(_panel, _altTreatment))
+            {
+                FirstAidTreatmentRouter.NotifyTreatmentBlocked(_panel, _altTreatment);
+                ApplyVisualState();
+                return;
+            }
 
             FirstAidTreatmentRouter.StartTreatment(_panel, _altTreatment);
         }
@@ -198,7 +203,7 @@ namespace ImprovedFirstAidPanel
         {
             if (_label == null) return;
 
-            if (FirstAidTreatmentRouter.IsTreatmentActive)
+            if (FirstAidTreatmentRouter.IsTreatmentActive || !FirstAidTreatmentRouter.CanStartTreatment(_panel, _altTreatment))
             {
                 _label.color = s_DisabledTextColor;
                 return;
@@ -320,7 +325,7 @@ namespace ImprovedFirstAidPanel
                 ConfigureLabel(label, panel, altTreatment);
 
             BoxCollider collider = buttonObject.GetComponent<BoxCollider>() ?? buttonObject.AddComponent<BoxCollider>();
-            collider.enabled = !FirstAidTreatmentRouter.IsTreatmentActive;
+            collider.enabled = FirstAidTreatmentRouter.CanStartTreatment(panel, altTreatment);
             collider.isTrigger = true;
             collider.center = Vector3.zero;
             collider.size = new Vector3(ButtonWidth, ButtonHeight, 1f);
@@ -340,7 +345,7 @@ namespace ImprovedFirstAidPanel
                 ConfigureLabel(label, panel, altTreatment);
 
             BoxCollider collider = buttonObject.GetComponent<BoxCollider>() ?? buttonObject.AddComponent<BoxCollider>();
-            collider.enabled = !FirstAidTreatmentRouter.IsTreatmentActive;
+            collider.enabled = FirstAidTreatmentRouter.CanStartTreatment(panel, altTreatment);
             collider.isTrigger = true;
             collider.center = Vector3.zero;
             collider.size = new Vector3(ButtonWidth, ButtonHeight, 1f);
@@ -352,8 +357,8 @@ namespace ImprovedFirstAidPanel
         private static void ConfigureLabel(UILabel label, Panel_FirstAid panel, bool altTreatment)
         {
             label.enabled = true;
-            label.text = altTreatment ? "USE ALT" : "USE";
-            label.color = FirstAidTreatmentRouter.IsTreatmentActive ? s_ButtonDisabledTextColor : s_ButtonTextColor;
+            label.text = FirstAidTreatmentRouter.GetTreatmentButtonText(panel, altTreatment);
+            label.color = FirstAidTreatmentRouter.CanStartTreatment(panel, altTreatment) ? s_ButtonTextColor : s_ButtonDisabledTextColor;
             label.alpha = 1f;
             label.width = (int)ButtonWidth;
             label.height = (int)ButtonHeight;
@@ -408,10 +413,57 @@ namespace ImprovedFirstAidPanel
 
         internal static bool StartTreatment(Panel_FirstAid panel, bool altTreatment)
         {
-            if (!Begin(panel)) return false;
-            if (!CopyTreatmentItems(panel, altTreatment)) return false;
+            if (!CanStartTreatment(panel, altTreatment))
+            {
+                NotifyTreatmentBlocked(panel, altTreatment);
+                return false;
+            }
 
-            return UseNextTreatmentItem(panel);
+            if (!Begin(panel)) return false;
+            if (!CopyTreatmentItems(panel, altTreatment))
+            {
+                AbortOverhaulTreatment(panel);
+                return false;
+            }
+
+            if (!UseNextTreatmentItem(panel))
+            {
+                AbortOverhaulTreatment(panel);
+                return false;
+            }
+
+            return true;
+        }
+
+        internal static bool CanStartTreatment(Panel_FirstAid panel, bool altTreatment)
+        {
+            if (panel == null) return false;
+            if (!panel.IsEnabled()) return false;
+            if (panel.m_SelectedAffButton == null) return false;
+            if (s_OverhaulTreatmentActive) return false;
+
+            Il2CppSystem.Collections.Generic.List<string> source = altTreatment ? panel.m_AltTreatmentItems : panel.m_MainTreatmentItems;
+            if (source == null || source.Count <= 0) return false;
+
+            return !IsSelectedIntestinalParasitesBlocked(panel);
+        }
+
+        internal static void NotifyTreatmentBlocked(Panel_FirstAid panel, bool altTreatment)
+        {
+            if (panel == null) return;
+            if (s_OverhaulTreatmentActive) return;
+            if (!IsSelectedIntestinalParasitesBlocked(panel)) return;
+
+            GameAudioManager.PlayGUIError();
+            HUDMessage.AddMessage(Localization.Get("GAMEPLAY_IntestinalParasitesAlreadyTakenDose"));
+        }
+
+        internal static string GetTreatmentButtonText(Panel_FirstAid panel, bool altTreatment)
+        {
+            if (IsSelectedIntestinalParasites(panel))
+                return HasTakenIntestinalParasitesDoseToday() ? "DOSE TAKEN" : "DAILY DOSE";
+
+            return altTreatment ? "USE ALT" : "USE";
         }
 
         internal static bool TryHandleFirstAidItemCallback(Panel_FirstAid panel)
@@ -424,12 +476,20 @@ namespace ImprovedFirstAidPanel
                 return false;
             }
 
+            if (s_PendingAfflictionType == AfflictionType.IntestinalParasites)
+            {
+                FinishOverhaulTreatment(panel);
+                return false;
+            }
+
             if (panel.m_TreatmentItemsToUse != null && panel.m_TreatmentItemsToUse.Count > 0)
             {
                 panel.RefreshCheckmarks();
                 panel.RefreshKit();
 
-                UseNextTreatmentItem(panel);
+                if (!UseNextTreatmentItem(panel))
+                    AbortOverhaulTreatment(panel);
+
                 return false;
             }
 
@@ -464,6 +524,12 @@ namespace ImprovedFirstAidPanel
 
             panel.m_TreatmentItemsToUse = new Il2CppSystem.Collections.Generic.List<string>();
 
+            if (s_PendingAfflictionType == AfflictionType.IntestinalParasites)
+            {
+                panel.m_TreatmentItemsToUse.Add(source[0]);
+                return true;
+            }
+
             for (int i = 0; i < source.Count; i++)
                 panel.m_TreatmentItemsToUse.Add(source[i]);
 
@@ -480,7 +546,7 @@ namespace ImprovedFirstAidPanel
                 return false;
             }
 
-            if (s_PendingAfflictionType == AfflictionType.IntestinalParasites && GameManager.GetIntestinalParasitesComponent().HasTakenDoseToday())
+            if (s_PendingAfflictionType == AfflictionType.IntestinalParasites && HasTakenIntestinalParasitesDoseToday())
             {
                 GameAudioManager.PlayGUIError();
                 HUDMessage.AddMessage(Localization.Get("GAMEPLAY_IntestinalParasitesAlreadyTakenDose"));
@@ -501,8 +567,11 @@ namespace ImprovedFirstAidPanel
 
             if (gearItem.m_FirstAidItem == null)
             {
-                GameManager.GetPlayerManagerComponent().UseInventoryItem(gearItem, ItemLiquidVolume.FromLiters(-1f), false);
-                GameManager.GetPlayerManagerComponent().m_UsedItemFromFirstAidPanel = true;
+                PlayerManager playerManager = GameManager.GetPlayerManagerComponent();
+                if (playerManager == null) return false;
+
+                playerManager.UseInventoryItem(gearItem, ItemLiquidVolume.FromLiters(-1f), false);
+                playerManager.m_UsedItemFromFirstAidPanel = true;
                 return true;
             }
 
@@ -544,6 +613,43 @@ namespace ImprovedFirstAidPanel
             result = playerManager.TreatAfflictionWithFirstAid(gearItem.m_FirstAidItem, selectedAffliction);
             playerManager.m_UsedItemFromFirstAidPanel = true;
             return result;
+        }
+
+        private static void AbortOverhaulTreatment(Panel_FirstAid panel)
+        {
+            s_OverhaulTreatmentActive = false;
+
+            PlayerManager playerManager = GameManager.GetPlayerManagerComponent();
+            if (playerManager != null)
+                playerManager.m_UsedItemFromFirstAidPanel = false;
+
+            if (panel == null) return;
+
+            panel.m_TreatmentItemsToUse?.Clear();
+            panel.m_ItemJustUsed = string.Empty;
+
+            panel.RefreshKit();
+            panel.RefreshCheckmarks();
+            FirstAidTreatmentButtonManager.Refresh(panel);
+        }
+
+        private static bool IsSelectedIntestinalParasites(Panel_FirstAid panel)
+        {
+            if (panel == null) return false;
+            if (panel.m_SelectedAffButton == null) return false;
+
+            return panel.GetSelectedAfflictionType() == AfflictionType.IntestinalParasites;
+        }
+
+        private static bool IsSelectedIntestinalParasitesBlocked(Panel_FirstAid panel)
+        {
+            return IsSelectedIntestinalParasites(panel) && HasTakenIntestinalParasitesDoseToday();
+        }
+
+        private static bool HasTakenIntestinalParasitesDoseToday()
+        {
+            var intestinalParasites = GameManager.GetIntestinalParasitesComponent();
+            return intestinalParasites != null && intestinalParasites.HasTakenDoseToday();
         }
 
         private static void FinishOverhaulTreatment(Panel_FirstAid panel)
