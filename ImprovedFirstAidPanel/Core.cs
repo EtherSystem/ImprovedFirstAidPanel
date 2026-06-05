@@ -1,7 +1,7 @@
 ﻿using Il2CppInterop.Runtime.Injection;
 using Il2CppTLD.IntBackedUnit;
 
-[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "Improved First Aid Panel", "1.0.4", "EtherSystem", null)]
+[assembly: MelonInfo(typeof(ImprovedFirstAidPanel.Core), "ImprovedFirstAidPanel", "1.0.5", "EtherSystem", null)]
 [assembly: MelonGame("Hinterland", "TheLongDark")]
 
 namespace ImprovedFirstAidPanel
